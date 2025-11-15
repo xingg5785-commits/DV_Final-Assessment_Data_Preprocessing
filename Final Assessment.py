@@ -11,8 +11,8 @@ sheets = [
     "PRICES_TAXES","LOCAL","HEALTH","SOCIOECONOMIC"
 ]
 
-# ID column will not impute
-id_columns = ["FIPS", "State", "County"]
+# Columns to keep original
+geo_columns = ["FIPS", "State", "County"]
 
 # Dictionary to store cleaned DataFrames
 cleaned = {}
@@ -48,10 +48,10 @@ for s in sheets:
 
     # ==== Remove the missing values ====
     numeric_features = df.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_features = df.select_dtypes(include=["object", "category"]).columns.tolist()
-
-    # Remove ID columns from categorical imputation list
-    categorical_features_to_impute = [c for c in categorical_features if c not in id_columns]
+    categorical_features = [
+		c for c in df.select_dtypes(include=["object"]).columns
+		if c not in geo_columns  # Protect geographic fields
+	]
 
     numeric_imputer = SimpleImputer(strategy='median')
     categorical_imputer = SimpleImputer(strategy='most_frequent')
@@ -67,9 +67,9 @@ for s in sheets:
         print(f"Note: no numeric columns to impute for {s}.")
 
     # Impute categorical columns only if there are non-ID categorical cols to impute
-    if len(categorical_features_to_impute) > 0:
+    if len(categorical_features) > 0:
         print(f"Categorical columns to impute for sheet {s}: {categorical_features_to_impute}")
-        df[categorical_features_to_impute] = categorical_imputer.fit_transform(df[categorical_features_to_impute])
+        df[categorical_features] = categorical_imputer.fit_transform(df[categorical_features])
     else:
         print(f"No categorical columns to impute for sheet {s} (only ID categorical columns or none).")
 
@@ -78,21 +78,16 @@ for s in sheets:
 
     # ==== Encoding categorical data ====
     # Select Non-Numerical Columns
-    data_column_category = df.select_dtypes(exclude=[np.number]).columns
-    print(data_column_category)
-    print(df[data_column_category].head())
-
     label_encoder = LabelEncoder()
-    for i in data_column_category:
-        df[i] = label_encoder.fit_transform(df[i])
+    for col in categorical_features:
+        df[col] = label_encoder.fit_transform(df[col].astype(str))
 
     print("\nLabel Encoder Data:")
     print(df.head())
 
     # ==== Feature scaling ====
-    features = df.drop(columns=['target'], errors='ignore').columns.tolist()
     scaler = StandardScaler()
-    df[features] = scaler.fit_transform(df[features])
+    df[numeric_features] = scaler.fit_transform(df[numeric_features])
 
     print("\nScaled Data:")
     print(df.head())
